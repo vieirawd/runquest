@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>RunQuest</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--neon:#00FFB2;--neon2:#FF6B35;--bg:#0A0E1A;--bg2:#111827;--bg3:#1A2235;--border:rgba(0,255,178,0.18);--text:#E8EDF5;--muted:#6B7A99;--gold:#FFD700}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'Barlow',sans-serif;color:var(--text)}
+#map{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
+
+#hud{position:fixed;top:0;left:0;right:0;z-index:100;padding:14px 16px 10px;background:linear-gradient(to bottom,rgba(10,14,26,0.95) 60%,transparent);display:flex;align-items:center;justify-content:space-between}
+.logo{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:var(--neon);text-shadow:0 0 20px rgba(0,255,178,0.5)}
+.logo span{color:var(--neon2)}
+#gps-pill{display:flex;align-items:center;gap:6px;background:rgba(10,14,26,0.8);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;color:var(--muted)}
+#gps-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:all 0.3s}
+#gps-dot.on{background:var(--neon);box-shadow:0 0 8px rgba(0,255,178,0.8);animation:bl 1.5s infinite}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:0.3}}
+.av-btn{width:40px;height:40px;border-radius:50%;border:2px solid var(--neon);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer}
+
+#recenter{position:fixed;right:16px;bottom:130px;z-index:100;width:48px;height:48px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.5)}
+
+#bnav{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:8px 20px 32px;background:linear-gradient(to top,rgba(10,14,26,0.98) 70%,transparent);display:flex;gap:10px;justify-content:center}
+.nb{flex:1;max-width:90px;height:56px;border-radius:16px;background:var(--bg3);border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--muted);font-size:20px}
+.nb span{font-size:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px}
+.nb.on{background:rgba(0,255,178,0.12);border-color:var(--neon);color:var(--neon)}
+
+/* POINT MARKERS */
+.rqm{cursor:pointer;display:flex;flex-direction:column;align-items:center;position:relative}
+.mt{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;border:3px solid var(--neon);background:radial-gradient(circle at 35% 35%,#1e3a5f,#0a1a2e);box-shadow:0 0 0 5px rgba(0,255,178,0.12),0 0 22px rgba(0,255,178,0.4);position:relative;animation:fl 3s ease-in-out infinite}
+.mt.gd{border-color:var(--gold);background:radial-gradient(circle at 35% 35%,#3a2800,#1a1000);box-shadow:0 0 0 5px rgba(255,215,0,0.12),0 0 22px rgba(255,215,0,0.5)}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.mr{position:absolute;inset:-8px;border-radius:50%;border:1.5px solid rgba(0,255,178,0.3);animation:rp 2.5s ease-out infinite}
+.mr.gd{border-color:rgba(255,215,0,0.3)}
+@keyframes rp{0%{transform:scale(1);opacity:0.8}100%{transform:scale(1.9);opacity:0}}
+.mb{width:4px;height:28px;background:linear-gradient(to bottom,var(--neon),transparent);border-radius:2px;opacity:0.7}
+.mb.gd{background:linear-gradient(to bottom,var(--gold),transparent)}
+.mbase{width:20px;height:6px;border-radius:50%;background:radial-gradient(ellipse,rgba(0,255,178,0.5) 0%,transparent 70%)}
+.mbase.gd{background:radial-gradient(ellipse,rgba(255,215,0,0.5) 0%,transparent 70%)}
+.mn{position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:var(--neon);white-space:nowrap;text-shadow:0 2px 4px rgba(0,0,0,1),0 0 10px rgba(0,255,178,0.8);pointer-events:none}
+.mn.gd{color:var(--gold);text-shadow:0 2px 4px rgba(0,0,0,1),0 0 10px rgba(255,215,0,0.8)}
+
+/* AVATAR */
+.avm{display:flex;flex-direction:column;align-items:center;position:relative}
+.avb{width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#1a4a8a,#0a1a3a);border:3px solid var(--neon);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 0 8px rgba(0,255,178,0.1),0 0 24px rgba(0,255,178,0.6);animation:ap 2s ease-in-out infinite;position:relative;z-index:1}
+@keyframes ap{0%,100%{box-shadow:0 0 0 8px rgba(0,255,178,0.1),0 0 24px rgba(0,255,178,0.6)}50%{box-shadow:0 0 0 14px rgba(0,255,178,0.05),0 0 34px rgba(0,255,178,0.8)}}
+.avr{position:absolute;inset:-10px;border-radius:50%;border:2px solid rgba(0,255,178,0.25);animation:ar 2s linear infinite}
+@keyframes ar{0%{transform:scale(1);opacity:0.6}100%{transform:scale(1.9);opacity:0}}
+
+/* BOTTOM SHEET */
+#ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.6);opacity:0;pointer-events:none;transition:opacity 0.3s;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+#ov.on{opacity:1;pointer-events:all}
+#sh{position:fixed;bottom:0;left:0;right:0;z-index:210;background:var(--bg2);border-radius:24px 24px 0 0;border-top:1px solid var(--border);transform:translateY(110%);transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#sh.on{transform:translateY(0)}
+.shdl{width:40px;height:4px;background:var(--muted);border-radius:2px;margin:12px auto 0;opacity:0.4}
+#shb{padding:16px 20px 120px}
+.ph{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.phi{width:62px;height:62px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#1e3a5f,#0a1a2e);border:2px solid var(--neon);display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 0 20px rgba(0,255,178,0.3)}
+.ph h2{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900}
+.ph p{font-size:13px;color:var(--muted);margin-top:3px}
+.dtabs{display:flex;gap:8px;margin-bottom:16px}
+.dt{flex:1;padding:11px 0;border-radius:12px;text-align:center;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--muted)}
+.dt.on{background:rgba(0,255,178,0.1);border-color:var(--neon);color:var(--neon)}
+.rc{background:var(--bg3);border-radius:16px;padding:16px;border:1px solid var(--border);margin-bottom:16px}
+.rl{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
+.ru{display:flex;align-items:center;gap:12px}
+.ra{width:46px;height:46px;border-radius:50%;background:var(--bg2);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 12px rgba(255,215,0,0.3)}
+.ri h3{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700}
+.ri p{font-size:12px;color:var(--muted)}
+.rs{display:flex;gap:10px;margin-top:12px}
+.rst{flex:1;background:var(--bg2);border-radius:10px;padding:10px;text-align:center}
+.rst .v{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:var(--neon)}
+.rst .l{font-size:10px;color:var(--muted);letter-spacing:0.5px;margin-top:2px}
+.cb{width:100%;padding:16px;border-radius:16px;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;letter-spacing:1px;background:linear-gradient(135deg,var(--neon),#00C896);color:var(--bg);box-shadow:0 4px 20px rgba(0,255,178,0.4)}
+
+/* RUN SCREEN */
+#run{position:fixed;inset:0;z-index:300;background:var(--bg);display:none;flex-direction:column}
+#run.on{display:flex}
+#rh{padding:50px 20px 16px;background:var(--bg2);border-bottom:1px solid var(--border)}
+#rcancel{font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:10px}
+#rpn{font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900}
+#rdb{display:inline-block;margin-top:4px;padding:3px 12px;border-radius:20px;background:rgba(0,255,178,0.1);border:1px solid var(--neon);font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--neon)}
+#rm{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.rtl{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+#rt{font-family:'Barlow Condensed',sans-serif;font-size:76px;font-weight:900;color:var(--neon);letter-spacing:2px;line-height:1;text-shadow:0 0 30px rgba(0,255,178,0.4)}
+#rstats{display:flex;gap:12px;margin-top:28px;width:100%}
+.rsb{flex:1;background:var(--bg3);border-radius:16px;padding:14px;border:1px solid var(--border);text-align:center}
+.rsb .big{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:900}
+.rsb .sm{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-top:4px}
+#rcomp{width:100%;background:var(--bg3);border-radius:16px;padding:14px 16px;border:1px solid rgba(255,215,0,0.2);margin-top:14px;display:flex;align-items:center;gap:10px}
+#rcomp .cl{font-size:11px;color:var(--muted);letter-spacing:1px}
+#rcomp .ct{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:var(--gold)}
+#tdiff{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700}
+.ah{color:var(--neon)}.bh{color:var(--neon2)}
+#rf{padding:16px 20px 40px}
+#stopb{width:100%;padding:16px;border-radius:16px;border:2px solid var(--neon2);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;letter-spacing:1px;background:rgba(255,107,53,0.1);color:var(--neon2)}
+
+/* VICTORY */
+#vic{position:fixed;inset:0;z-index:400;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px}
+#vic.on{display:flex}
+.vi{font-size:80px;animation:pp 0.5s cubic-bezier(0.34,1.56,0.64,1)}
+@keyframes pp{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+#vt{font-family:'Barlow Condensed',sans-serif;font-size:50px;font-weight:900;letter-spacing:2px;line-height:1;margin-top:12px}
+.vtr{color:var(--neon);text-shadow:0 0 20px rgba(0,255,178,0.4)}
+.vtd{color:var(--muted)}
+#vs{font-size:15px;color:var(--muted);margin:8px 0 24px}
+.vstats{display:flex;gap:12px;width:100%;margin-bottom:20px}
+.vst{flex:1;background:var(--bg3);border-radius:16px;padding:16px;border:1px solid var(--border)}
+.vst .n{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:900;color:var(--neon)}
+.vst .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+.vbadge{border-radius:12px;padding:12px 20px;margin-bottom:20px;width:100%;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px}
+.vbr{background:rgba(255,215,0,0.1);border:1px solid var(--gold);color:var(--gold)}
+.vbm{background:rgba(255,107,53,0.1);border:1px solid var(--neon2);color:var(--neon2)}
+#vback{width:100%;padding:16px;border-radius:16px;border:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;letter-spacing:1px;background:linear-gradient(135deg,var(--neon),#00C896);color:var(--bg);box-shadow:0 4px 20px rgba(0,255,178,0.4)}
+
+/* PROFILE */
+#prof{position:fixed;inset:0;z-index:500;background:var(--bg);display:none;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:54px 20px 100px}
+#prof.on{display:flex}
+.pb{font-size:13px;color:var(--muted);cursor:pointer;margin-bottom:16px}
+.phead{text-align:center;padding:28px 20px;background:var(--bg3);border-radius:20px;border:1px solid var(--border);margin-bottom:16px}
+.pav{width:76px;height:76px;border-radius:50%;margin:0 auto 10px;background:radial-gradient(circle at 35% 30%,#1a4a8a,#0a1a3a);border:3px solid var(--neon);display:flex;align-items:center;justify-content:center;font-size:34px;box-shadow:0 0 28px rgba(0,255,178,0.4)}
+.pname{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:900}
+.plvl{display:inline-block;margin:6px 0;padding:3px 12px;border-radius:20px;background:rgba(0,255,178,0.1);border:1px solid var(--neon);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--neon)}
+.pstats{display:flex;gap:8px;margin-bottom:16px}
+.pst{flex:1;background:var(--bg3);border-radius:14px;padding:14px;border:1px solid var(--border);text-align:center}
+.pst .n{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;color:var(--neon)}
+.pst .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:2px}
+.psec{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
+.prr{background:var(--bg3);border-radius:14px;padding:14px 16px;border:1px solid var(--border);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.prl{display:flex;align-items:center;gap:10px}
+
+#toast{position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-80px);background:var(--bg3);border:1px solid var(--neon);border-radius:12px;padding:10px 20px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--neon);z-index:600;transition:transform 0.3s;white-space:nowrap;box-shadow:0 4px 20px rgba(0,255,178,0.3);pointer-events:none}
+#toast.on{transform:translateX(-50%) translateY(0)}
+.ptc{position:fixed;pointer-events:none;z-index:700;font-size:22px;animation:pf 1.3s ease-out forwards}
+@keyframes pf{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--tx),var(--ty)) scale(0);opacity:0}}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="hud">
+  <div class="logo">Run<span>Quest</span></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div id="gps-pill"><div id="gps-dot"></div><span id="gpst">GPS</span></div>
+    <div class="av-btn" onclick="openProf()">🏃</div>
+  </div>
+</div>
+
+<div id="recenter" onclick="recenter()">📍</div>
+
+<div id="bnav">
+  <div class="nb on" id="nb-map" onclick="navMap()">🗺️<span>Mapa</span></div>
+  <div class="nb" id="nb-rank" onclick="openRank()">🏆<span>Ranking</span></div>
+  <div class="nb" id="nb-prof" onclick="openProf()">👤<span>Perfil</span></div>
+</div>
+
+<div id="ov" onclick="closeSheet()"></div>
+<div id="sh"><div class="shdl"></div><div id="shb"></div></div>
+
+<div id="run">
+  <div id="rh">
+    <div id="rcancel" onclick="cancelRun()">← Cancelar corrida</div>
+    <div id="rpn">Ponto</div>
+    <div id="rdb">5 km</div>
+  </div>
+  <div id="rm">
+    <div class="rtl">TEMPO DECORRIDO</div>
+    <div id="rt">00:00:00</div>
+    <div id="rstats">
+      <div class="rsb"><div class="big" id="rpace" style="color:var(--neon)">--:--</div><div class="sm">PACE /km</div></div>
+      <div class="rsb"><div class="big" id="rdist" style="color:var(--text)">0.00</div><div class="sm">KM</div></div>
+      <div class="rsb"><div class="big" id="rkcal" style="color:var(--neon2)">0</div><div class="sm">KCAL</div></div>
+    </div>
+    <div id="rcomp">
+      <div><div class="cl">🏆 RECORDE A BATER</div><div class="ct" id="rctime">—</div></div>
+      <div id="tdiff">—</div>
+    </div>
+  </div>
+  <div id="rf"><button id="stopb" onclick="finishRun()">⏹ FINALIZAR CORRIDA</button></div>
+</div>
+
+<div id="vic">
+  <div class="vi" id="vi">🏆</div>
+  <div id="vt" class="vtr">NOVO RECORDE!</div>
+  <div id="vs">—</div>
+  <div class="vstats">
+    <div class="vst"><div class="n" id="vtime">—</div><div class="l">Tempo</div></div>
+    <div class="vst"><div class="n" id="vpace">—</div><div class="l">Pace médio</div></div>
+  </div>
+  <div id="vba"></div>
+  <button id="vback" onclick="backMap()">← Voltar ao mapa</button>
+</div>
+
+<div id="prof">
+  <div class="pb" onclick="closeProf()">← Fechar perfil</div>
+  <div class="phead">
+    <div class="pav">🏃</div>
+    <div class="pname">Você</div>
+    <div class="plvl">⚡ Nível 12 · Corredor Elite</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:6px">São Paulo, SP 🇧🇷</div>
+  </div>
+  <div class="pstats">
+    <div class="pst"><div class="n" id="precs">0</div><div class="l">Recordes</div></div>
+    <div class="pst"><div class="n">142</div><div class="l">km totais</div></div>
+    <div class="pst"><div class="n">28</div><div class="l">Corridas</div></div>
+  </div>
+  <div class="psec">🏆 Seus recordes</div>
+  <div id="preclist"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const ME={name:'Você',emoji:'🏃',id:'me'};
+const OFF=[{dx:0,dy:0},{dx:.004,dy:-.003},{dx:-.005,dy:.004},{dx:.002,dy:.006},{dx:-.003,dy:-.005}];
+const TPL=[
+  {name:'Pista Central',icon:'🏟️',desc:'Pista plana e sinalizada.'},
+  {name:'Volta do Lago',icon:'🌊',desc:'Contorno do lago, vista panorâmica.'},
+  {name:'Trilha Norte',icon:'🌿',desc:'Trilha com desnível leve.'},
+  {name:'Avenida Parque',icon:'🏙️',desc:'Rua arborizada, piso regular.'},
+  {name:'Circuito Sul',icon:'🌉',desc:'Circuito fechado, bom para pace.'},
+];
+
+let BASE={lat:-23.5874,lng:-46.6576};
+let points=TPL.map((t,i)=>({
+  id:i,...t,
+  lat:BASE.lat+OFF[i].dy, lng:BASE.lng+OFF[i].dx,
+  records:{
+    5: {holder:{name:'Lucas P.',emoji:'🦅',id:'lp'},time:1500,pace:'5:00',date:'12 Mar'},
+    10:{holder:{name:'Carla M.',emoji:'🦁',id:'cm'},time:3720,pace:'6:12',date:'10 Mar'},
+    21:{holder:{name:'Rafael T.',emoji:'🐺',id:'rt'},time:8400,pace:'6:40',date:'5 Mar'},
+  }
+}));
+points[0].records[5]={holder:ME,time:1620,pace:'5:24',date:'14 Mar'};
+
+let map,avatarMarker,gmarkers=[],curPt=0,curDist=5,runIv=null,runSec=0;
+let userLat=BASE.lat,userLng=BASE.lng,firstGPS=true;
+
+function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;if(h>0)return`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;return`${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`}
+function fmtL(s){return`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
+function calcPace(s,k){if(k<=0)return'--:--';const ps=s/k,m=Math.floor(ps/60),sec=Math.floor(ps%60);return`${m}:${String(sec).padStart(2,'0')}`}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600)}
+function parts(a){a.forEach(e=>{const p=document.createElement('div');p.className='ptc';p.textContent=e;const tx=(Math.random()-.5)*220,ty=-80-Math.random()*180;p.style.cssText=`left:${20+Math.random()*60}%;top:50%;--tx:${tx}px;--ty:${ty}px`;document.body.appendChild(p);setTimeout(()=>p.remove(),1400)})}
+
+function initMap(){
+  map=new google.maps.Map(document.getElementById('map'),{
+    center:{lat:BASE.lat,lng:BASE.lng},
+    zoom:16,
+    mapId:'runquest',
+    disableDefaultUI:true,
+    gestureHandling:'greedy',
+    styles:[
+      {elementType:'geometry',stylers:[{color:'#0a0e1a'}]},
+      {elementType:'labels.text.fill',stylers:[{color:'#6b7a99'}]},
+      {elementType:'labels.text.stroke',stylers:[{color:'#0a0e1a'}]},
+      {featureType:'road',elementType:'geometry',stylers:[{color:'#1a2235'}]},
+      {featureType:'road.arterial',elementType:'geometry',stylers:[{color:'#1e3a5f'}]},
+      {featureType:'road.highway',elementType:'geometry',stylers:[{color:'#0d2137'}]},
+      {featureType:'road',elementType:'labels.text.fill',stylers:[{color:'#3a4a6b'}]},
+      {featureType:'water',elementType:'geometry',stylers:[{color:'#0d1b2e'}]},
+      {featureType:'poi',elementType:'geometry',stylers:[{color:'#111827'}]},
+      {featureType:'poi.park',elementType:'geometry',stylers:[{color:'#0d1f0d'}]},
+      {featureType:'transit',stylers:[{visibility:'off'}]},
+      {featureType:'administrative',elementType:'geometry.stroke',stylers:[{color:'#1a2235'}]},
+    ]
+  });
+  points.forEach(p=>addMarker(p));
+  initAvatar();
+  startGPS();
+}
+
+function makeMarkerEl(p){
+  const owned=Object.values(p.records).some(r=>r.holder.id==='me');
+  const g=owned?'gd':'';
+  const el=document.createElement('div');
+  el.className='rqm';
+  el.id='pm'+p.id;
+  el.innerHTML=`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
+    <div class="mt ${g}"><div class="mr ${g}"></div>${p.icon}</div>
+    <div class="mb ${g}"></div>
+    <div class="mbase ${g}"></div>
+    <div class="mn ${g}">${p.name}</div>
+  </div>`;
+  el.addEventListener('click',()=>openPt(p.id));
+  return el;
+}
+
+function addMarker(p){
+  const el=makeMarkerEl(p);
+  const ov=new google.maps.OverlayView();
+  ov.onAdd=function(){this.getPanes().overlayMouseTarget.appendChild(el)};
+  ov.draw=function(){
+    const proj=this.getProjection();
+    const pos=proj.fromLatLngToDivPixel(new google.maps.LatLng(p.lat,p.lng));
+    if(pos){el.style.position='absolute';el.style.left=(pos.x-27)+'px';el.style.top=(pos.y-90)+'px'}
+  };
+  ov.onRemove=function(){el.parentNode&&el.parentNode.removeChild(el)};
+  ov.setMap(map);
+  p._ov=ov; p._el=el;
+  gmarkers.push(ov);
+}
+
+function initAvatar(){
+  const el=document.createElement('div');
+  el.className='avm';
+  el.innerHTML='<div class="avb">🏃</div><div class="avr"></div>';
+  const ov=new google.maps.OverlayView();
+  ov.onAdd=function(){this.getPanes().overlayMouseTarget.appendChild(el)};
+  ov.draw=function(){
+    const proj=this.getProjection();
+    const pos=proj.fromLatLngToDivPixel(new google.maps.LatLng(userLat,userLng));
+    if(pos){el.style.position='absolute';el.style.left=(pos.x-22)+'px';el.style.top=(pos.y-22)+'px'}
+  };
+  ov.setMap(map);
+  avatarMarker=ov;
+  window._avatarOv=ov; window._avatarEl=el;
+}
+
+function moveAvatar(lat,lng){
+  userLat=lat; userLng=lng;
+  if(avatarMarker) avatarMarker.draw();
+}
+
+function reposPoints(lat,lng){
+  points.forEach((p,i)=>{
+    p.lat=lat+OFF[i].dy;
+    p.lng=lng+OFF[i].dx;
+    if(p._ov) p._ov.draw();
+  });
+}
+
+function startGPS(){
+  if(!('geolocation' in navigator)){toast('GPS indisponível');return}
+  document.getElementById('gpst').textContent='Buscando...';
+  navigator.geolocation.watchPosition(
+    pos=>{
+      const{latitude:lat,longitude:lng}=pos.coords;
+      document.getElementById('gps-dot').classList.add('on');
+      document.getElementById('gpst').textContent='GPS ✓';
+      if(firstGPS){
+        firstGPS=false;
+        reposPoints(lat,lng);
+        map.setCenter({lat,lng});
+      }
+      moveAvatar(lat,lng);
+    },
+    ()=>{
+      document.getElementById('gpst').textContent='Sem GPS';
+      toast('📍 GPS indisponível — modo demo');
+      simMove();
+    },
+    {enableHighAccuracy:true,maximumAge:2000,timeout:15000}
+  );
+}
+
+function simMove(){
+  let t=0;
+  setInterval(()=>{
+    t+=0.01;
+    moveAvatar(BASE.lat+Math.sin(t)*0.0002, BASE.lng+Math.cos(t)*0.0002);
+  },500);
+}
+
+function recenter(){map.setCenter({lat:userLat,lng:userLng});map.setZoom(16)}
+
+function openPt(id){curPt=id;curDist=5;renderSheet();openSheet()}
+function openSheet(){document.getElementById('ov').classList.add('on');document.getElementById('sh').classList.add('on')}
+function closeSheet(){document.getElementById('ov').classList.remove('on');document.getElementById('sh').classList.remove('on')}
+function selDist(d){curDist=d;renderSheet()}
+
+function renderSheet(){
+  const p=points[curPt],rec=p.records[curDist],isMe=rec.holder.id==='me';
+  document.getElementById('shb').innerHTML=`
+    <div class="ph"><div class="phi">${p.icon}</div><div><h2>${p.name}</h2><p>${p.desc}</p></div></div>
+    <div class="dtabs">
+      <div class="dt ${curDist===5?'on':''}" onclick="selDist(5)">5 km</div>
+      <div class="dt ${curDist===10?'on':''}" onclick="selDist(10)">10 km</div>
+      <div class="dt ${curDist===21?'on':''}" onclick="selDist(21)">21 km</div>
+    </div>
+    <div class="rc">
+      <div class="rl">👑 Recordista atual</div>
+      <div class="ru">
+        <div class="ra" style="${isMe?'border-color:var(--neon);box-shadow:0 0 12px rgba(0,255,178,0.4)':''}">${rec.holder.emoji}</div>
+        <div class="ri"><h3>${rec.holder.name}${isMe?' <span style="color:var(--neon);font-size:13px">← você!</span>':''}</h3><p>Registrado em ${rec.date}</p></div>
+      </div>
+      <div class="rs">
+        <div class="rst"><div class="v">${fmt(rec.time)}</div><div class="l">Tempo</div></div>
+        <div class="rst"><div class="v">${rec.pace}</div><div class="l">Pace /km</div></div>
+        <div class="rst"><div class="v">${curDist}km</div><div class="l">Dist.</div></div>
+      </div>
+    </div>
+    <button class="cb" onclick="startRun()">${isMe?'🔄 Defender recorde':'⚡ Desafiar recorde!'}</button>`;
+}
+
+function startRun(){
+  closeSheet();
+  const p=points[curPt],rec=p.records[curDist];
+  document.getElementById('rpn').textContent=p.name;
+  document.getElementById('rdb').textContent=curDist+' km';
+  document.getElementById('rctime').textContent=fmt(rec.time);
+  document.getElementById('rt').textContent='00:00:00';
+  document.getElementById('rpace').textContent='--:--';
+  document.getElementById('rdist').textContent='0.00';
+  document.getElementById('rkcal').textContent='0';
+  document.getElementById('tdiff').textContent='—';
+  document.getElementById('run').classList.add('on');
+  runSec=0;
+  const sp=300+Math.random()*55;
+  runIv=setInterval(()=>{
+    runSec++;
+    document.getElementById('rt').textContent=fmtL(runSec);
+    const km=Math.min(runSec/sp,curDist);
+    document.getElementById('rdist').textContent=km.toFixed(2);
+    document.getElementById('rkcal').textContent=Math.floor(km*65);
+    if(km>0.05)document.getElementById('rpace').textContent=calcPace(runSec,km);
+    const diff=runSec-rec.time,td=document.getElementById('tdiff');
+    if(diff<0){td.textContent='▲ +'+fmt(Math.abs(diff));td.className='ah'}
+    else{td.textContent='▼ -'+fmt(diff);td.className='bh'}
+    if(km>=curDist)finishRun();
+  },1000);
+  toast('⚡ Corrida iniciada!');
+  map.setCenter({lat:userLat,lng:userLng});
+}
+
+function cancelRun(){clearInterval(runIv);runIv=null;document.getElementById('run').classList.remove('on');toast('Corrida cancelada')}
+
+function finishRun(){
+  clearInterval(runIv);runIv=null;
+  document.getElementById('run').classList.remove('on');
+  const p=points[curPt],rec=p.records[curDist],isNew=runSec<rec.time;
+  if(isNew){
+    p.records[curDist]={holder:ME,time:runSec,pace:calcPace(runSec,curDist),date:'Hoje'};
+    const el=document.getElementById('pm'+curPt);
+    if(el){el.querySelectorAll('.mt,.mr,.mb,.mbase,.mn').forEach(n=>{n.classList.add('gd')})}
+    document.getElementById('vi').textContent='🏆';
+    document.getElementById('vt').className='vtr';
+    document.getElementById('vt').textContent='NOVO RECORDE!';
+    document.getElementById('vba').innerHTML=`<div class="vbadge vbr">🥇 Você é o novo recordista de ${curDist}km em ${p.name}!</div>`;
+    parts(['🏆','⚡','🎉','🌟','💫','🔥','🥇','✨']);
+  }else{
+    document.getElementById('vi').textContent='💪';
+    document.getElementById('vt').className='vtd';
+    document.getElementById('vt').textContent='CORRIDA CONCLUÍDA';
+    document.getElementById('vba').innerHTML=`<div class="vbadge vbm">Ficou ${fmt(runSec-rec.time)} atrás — continue treinando!</div>`;
+  }
+  document.getElementById('vs').textContent=`${p.name} · ${curDist} km`;
+  document.getElementById('vtime').textContent=fmt(runSec);
+  document.getElementById('vpace').textContent=calcPace(runSec,curDist)+'/km';
+  document.getElementById('vic').classList.add('on');
+}
+
+function backMap(){document.getElementById('vic').classList.remove('on')}
+
+function openProf(){
+  const myR=[];
+  points.forEach(p=>[5,10,21].forEach(d=>{if(p.records[d].holder.id==='me')myR.push({p,d,r:p.records[d]})}));
+  document.getElementById('precs').textContent=myR.length;
+  document.getElementById('preclist').innerHTML=myR.length?myR.map(x=>`
+    <div class="prr">
+      <div class="prl"><span style="font-size:22px">${x.p.icon}</span>
+        <div><div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700">${x.p.name} 👑</div>
+        <div style="font-size:12px;color:var(--muted)">${x.d} km · ${x.r.date}</div></div>
+      </div>
+      <div><div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:var(--neon);text-align:right">${fmt(x.r.time)}</div>
+      <div style="font-size:12px;color:var(--muted);text-align:right">${x.r.pace}/km</div></div>
+    </div>`).join(''):'<p style="color:var(--muted);font-size:14px">Nenhum recorde ainda!</p>';
+  document.getElementById('prof').classList.add('on');
+  setNav('nb-prof');
+}
+function closeProf(){document.getElementById('prof').classList.remove('on');setNav('nb-map')}
+
+function openRank(){
+  const html=points.map(p=>`
+    <div style="background:var(--bg3);border-radius:16px;padding:16px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:10px">${p.icon} ${p.name}</div>
+      ${[5,10,21].map((d,i)=>{const r=p.records[d];const md=['🥇','🥈','🥉'];
+        return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:${i<2?'1px solid var(--border)':'none'}">
+          <span style="font-size:20px;width:28px">${md[i]}</span>
+          <span style="font-size:20px">${r.holder.emoji}</span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;flex:1">${r.holder.name}<br><span style="font-size:11px;color:var(--muted);font-weight:400">${d} km</span></span>
+          <span style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;color:var(--neon)">${fmt(r.time)}</span>
+        </div>`}).join('')}
+    </div>`).join('');
+  document.getElementById('shb').innerHTML=`<div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;margin-bottom:16px">🏅 Ranking Global</div>${html}`;
+  openSheet();
+  setNav('nb-rank');
+}
+
+function navMap(){closeSheet();closeProf();setNav('nb-map')}
+function setNav(id){document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));document.getElementById(id).classList.add('on')}
+</script>
+
+<script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCiGX8_PJiqtM1iwL5ANQ57Gw4nYqgUag4&callback=initMap">
+</script>
+
+</body>
+</html>
