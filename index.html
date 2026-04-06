@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RunStreet – Ribeirão Preto</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:#0a0e1a; font-family:'Segoe UI',sans-serif; }
+
+#map-tilt {
+  width:100%; height:115%;
+  transform: perspective(700px) rotateX(22deg);
+  transform-origin: center top;
+  position:absolute; top:0; left:0;
+}
+#map { width:100%; height:100%; }
+
+#ui { position:fixed; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:1000; }
+
+#top-bar {
+  position:absolute; top:0; left:0; right:0;
+  padding:14px 16px;
+  display:flex; justify-content:space-between; align-items:flex-start;
+  pointer-events:none;
+}
+#logo {
+  background:rgba(255,120,0,0.97);
+  color:#fff; font-size:17px; font-weight:900;
+  padding:8px 14px; border-radius:10px; letter-spacing:1px;
+  box-shadow:0 2px 14px rgba(255,120,0,0.55);
+}
+#logo span { display:block; font-size:9px; font-weight:400; letter-spacing:2px; color:#fffd; }
+
+#gps-box {
+  background:rgba(8,12,24,0.9);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:11px; padding:9px 13px;
+  text-align:right; color:#fff; font-size:11px; line-height:1.7;
+}
+#gps-box .val { color:#ff8c00; font-size:15px; font-weight:700; }
+.ok { color:#4cff88; } .wait { color:#ffcc00; } .err { color:#ff5050; }
+
+#hint {
+  position:absolute; bottom:130px; right:14px;
+  background:rgba(8,12,24,0.85);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:11px; padding:10px 13px;
+  color:rgba(255,255,255,0.65); font-size:10.5px; line-height:1.9;
+}
+#hint b { color:#ff8c00; }
+
+#joy-wrap { position:absolute; bottom:22px; left:22px; pointer-events:all; }
+#joy-base {
+  width:106px; height:106px;
+  background:rgba(255,255,255,0.07);
+  border:2px solid rgba(255,255,255,0.18);
+  border-radius:50%; position:relative;
+  touch-action:none; user-select:none;
+}
+#joy-thumb {
+  width:42px; height:42px;
+  background:linear-gradient(135deg,#ff8c00,#ff4000);
+  border-radius:50%;
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  box-shadow:0 2px 12px rgba(255,120,0,0.55);
+}
+
+#sprint-btn {
+  position:absolute; bottom:36px; right:22px;
+  width:68px; height:68px;
+  background:linear-gradient(135deg,#ff8c00,#ff3a00);
+  border:none; border-radius:50%;
+  color:#fff; font-size:10.5px; font-weight:800;
+  pointer-events:all; cursor:pointer;
+  box-shadow:0 4px 18px rgba(255,100,0,0.55); letter-spacing:.5px;
+}
+#sprint-btn.active { background:linear-gradient(135deg,#ffd700,#ff8c00); }
+
+#run-hud {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  display:flex; flex-direction:column; align-items:center;
+  justify-content:flex-start; padding-top:72px; pointer-events:none;
+}
+#run-hud.hidden { display:none; }
+#run-stats {
+  background:rgba(8,12,24,0.92);
+  border:1px solid rgba(255,140,0,0.45);
+  border-radius:16px; padding:14px 22px;
+  display:flex; gap:28px; color:#fff;
+}
+.rs { text-align:center; }
+.rs-val { font-size:26px; font-weight:800; color:#ff8c00; font-variant-numeric:tabular-nums; }
+.rs-lbl { font-size:9px; color:rgba(255,255,255,0.45); letter-spacing:1.2px; text-transform:uppercase; margin-top:2px; }
+
+#countdown {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none; z-index:50;
+}
+#countdown.hidden { display:none; }
+#cd-num {
+  font-size:110px; font-weight:900; color:#ff8c00;
+  text-shadow:0 0 50px rgba(255,140,0,0.8);
+  animation: cdPop .7s ease-out;
+}
+@keyframes cdPop { 0%{transform:scale(1.5);opacity:.4} 100%{transform:scale(1);opacity:1} }
+
+#modal-bg {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.72);
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:all; z-index:200; backdrop-filter:blur(5px);
+}
+#modal-bg.hidden { display:none; }
+#modal {
+  background:#0d1424;
+  border:1px solid rgba(255,140,0,0.38);
+  border-radius:20px; padding:26px 22px;
+  width:min(370px,93vw); color:#fff; position:relative;
+}
+#modal-x {
+  position:absolute; top:12px; right:14px;
+  background:rgba(255,255,255,0.1); border:none;
+  color:#fff; width:27px; height:27px; border-radius:50%;
+  cursor:pointer; font-size:13px;
+  display:flex; align-items:center; justify-content:center;
+}
+#modal-name { font-size:19px; font-weight:800; color:#ff8c00; margin-bottom:3px; }
+#modal-addr { font-size:11px; color:rgba(255,255,255,0.45); margin-bottom:6px; }
+#modal-desc { font-size:11.5px; color:rgba(255,255,255,0.55); margin-bottom:16px; line-height:1.6; }
+.dtabs { display:flex; gap:7px; margin-bottom:18px; }
+.dtab {
+  flex:1; padding:9px 0; text-align:center;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:9px; color:rgba(255,255,255,0.5);
+  font-size:12.5px; font-weight:600; cursor:pointer; transition:all .18s;
+}
+.dtab.on { background:rgba(255,140,0,0.2); border-color:#ff8c00; color:#ff8c00; }
+.rec-card {
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:13px; padding:15px;
+  display:flex; align-items:center; gap:13px; margin-bottom:15px;
+}
+.rec-av {
+  width:52px; height:52px; border-radius:50%;
+  background:linear-gradient(135deg,#ff8c00,#ff4000);
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:800; color:#fff; flex-shrink:0;
+  border:2px solid rgba(255,140,0,0.5);
+}
+.rec-info { flex:1; }
+.rec-name { font-size:14.5px; font-weight:700; margin-bottom:1px; }
+.rec-meta { font-size:10.5px; color:rgba(255,255,255,0.38); margin-bottom:5px; }
+.rec-time { font-size:21px; font-weight:800; color:#ff8c00; font-variant-numeric:tabular-nums; }
+.rec-pace { font-size:10.5px; color:rgba(255,255,255,0.45); margin-top:2px; }
+.crown { background:linear-gradient(135deg,#ffd700,#ff8c00); color:#000; font-size:9.5px; font-weight:800; padding:2px 7px; border-radius:20px; display:inline-block; margin-bottom:5px; }
+#challenge-btn {
+  width:100%; background:linear-gradient(135deg,#ff8c00,#ff3a00);
+  border:none; border-radius:12px; color:#fff;
+  font-size:14.5px; font-weight:700; padding:13px;
+  cursor:pointer; letter-spacing:.4px;
+}
+
+#finish-bg {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  background:rgba(0,0,0,0.82);
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:all; z-index:300; backdrop-filter:blur(7px);
+}
+#finish-bg.hidden { display:none; }
+#finish-card {
+  background:#0d1424; border:2px solid #ff8c00;
+  border-radius:22px; padding:30px 26px;
+  width:min(350px,90vw); text-align:center; color:#fff;
+}
+#finish-card h2 { font-size:26px; margin-bottom:6px; }
+.ft { font-size:50px; font-weight:900; margin:14px 0; }
+.fsub { font-size:12.5px; color:rgba(255,255,255,0.45); margin-bottom:18px; }
+.nr-badge {
+  background:linear-gradient(135deg,#ffd700,#ff8c00);
+  color:#000; font-weight:800; font-size:15px;
+  padding:7px 18px; border-radius:28px;
+  display:inline-block; margin-bottom:14px;
+  animation: glowp 1s ease-in-out infinite alternate;
+}
+@keyframes glowp { from{box-shadow:0 0 8px rgba(255,215,0,.5)} to{box-shadow:0 0 26px rgba(255,215,0,.9)} }
+#finish-back {
+  background:rgba(255,255,255,0.09);
+  border:1px solid rgba(255,255,255,0.18);
+  border-radius:11px; color:#fff; font-size:13.5px; font-weight:600;
+  padding:11px 26px; cursor:pointer; margin-top:6px;
+}
+
+/* Leaflet dark override */
+.leaflet-container { background:#0a0e1a !important; }
+.leaflet-bar a { background:#0d1424 !important; color:#ff8c00 !important; border-color:rgba(255,140,0,0.3) !important; }
+.leaflet-bar a:hover { background:#1a2035 !important; }
+.player-pin { pointer-events:none !important; }
+</style>
+</head>
+<body>
+
+<div id="map-tilt">
+  <div id="map"></div>
+</div>
+
+<div id="ui">
+  <div id="top-bar">
+    <div id="logo">RUNSTREET<span>RIBEIRÃO PRETO</span></div>
+    <div id="gps-box">
+      <div id="gps-status" class="wait">● Aguardando GPS…</div>
+      <div class="val" id="speed-val">0.0 km/h</div>
+      <div style="font-size:9px;color:rgba(255,255,255,.3)" id="coord-val">—</div>
+    </div>
+  </div>
+
+  <div id="hint">
+    <b>GPS real</b> — move boneco automaticamente<br>
+    <b>Joystick</b> — simulação sem GPS<br>
+    <b>Câmera</b> — arrastar o mapa<br>
+    <b>Ponto 🏁</b> — toque no marcador
+  </div>
+
+  <div id="joy-wrap">
+    <div id="joy-base"><div id="joy-thumb"></div></div>
+  </div>
+  <button id="sprint-btn">SPRINT</button>
+
+  <div id="run-hud" class="hidden">
+    <div id="run-stats">
+      <div class="rs"><div class="rs-val" id="rt">00:00</div><div class="rs-lbl">Tempo</div></div>
+      <div class="rs"><div class="rs-val" id="rd">0.00</div><div class="rs-lbl">KM</div></div>
+      <div class="rs"><div class="rs-val" id="rp">--:--</div><div class="rs-lbl">Ritmo</div></div>
+    </div>
+  </div>
+
+  <div id="countdown" class="hidden"><div id="cd-num">3</div></div>
+</div>
+
+<div id="modal-bg" class="hidden">
+  <div id="modal">
+    <button id="modal-x">✕</button>
+    <div id="modal-name">Ponto</div>
+    <div id="modal-addr">Ribeirão Preto, SP</div>
+    <div id="modal-desc"></div>
+    <div class="dtabs">
+      <div class="dtab on" data-d="5">5 km</div>
+      <div class="dtab" data-d="10">10 km</div>
+      <div class="dtab" data-d="21">21 km</div>
+    </div>
+    <div class="rec-card">
+      <div class="rec-av" id="rav">?</div>
+      <div class="rec-info">
+        <div class="crown">👑 RECORDISTA</div>
+        <div class="rec-name" id="rname">Sem recorde</div>
+        <div class="rec-meta" id="rmeta">Seja o primeiro!</div>
+        <div class="rec-time" id="rtime">--:--:--</div>
+        <div class="rec-pace" id="rpace"></div>
+      </div>
+    </div>
+    <button id="challenge-btn">🏃 DESAFIAR RECORDE</button>
+  </div>
+</div>
+
+<div id="finish-bg" class="hidden">
+  <div id="finish-card">
+    <div id="fbadge"></div>
+    <h2 id="ftitle" style="color:#ff8c00">Corrida Concluída!</h2>
+    <div class="ft" id="ftime">00:00:00</div>
+    <div class="fsub" id="fsub">Parabéns!</div>
+    <button id="finish-back">Voltar ao Mapa</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  10 PONTOS REAIS – locais mais populares de corrida
+//  em Ribeirão Preto (baseado em pesquisa Strava/local)
+// ══════════════════════════════════════════════════
+const POINTS = [
+  { id:0, name:'Parque Curupira (Jábali)', addr:'Av. Costábile Romano – Ribeirânia', lat:-21.1876, lng:-47.8408, desc:'O maior parque urbano de RP: 152.000m². Trilhas longas, lago artificial, muito popular com grupos de corrida.' },
+  { id:1, name:'Parque das Artes', addr:'R. Joaquim Simões Gomes, 420 – Nova Aliança', lat:-21.2104, lng:-47.8298, desc:'Maior pista de corrida da cidade: 1.500m de extensão ao lado do RibeirãoShopping.' },
+  { id:2, name:'Parque Luís Carlos Raya', addr:'Av. Wladimir Meirelles Ferreira – Jd. Botânico', lat:-21.2193, lng:-47.8492, desc:'Pista de 1km, cascatas artificiais e área verde na zona sul. Aberto diariamente 6h–21h.' },
+  { id:3, name:'Parque Tom Jobim', addr:'Av. Octávio Golfeto – Jd. Procópio', lat:-21.1798, lng:-47.8012, desc:'Academia ao ar livre + pista de corrida arborizada. Aberto 6h–20h.' },
+  { id:4, name:'Praça do Canhão', addr:'Final da Av. 13 de Maio – Zona Leste', lat:-21.1724, lng:-47.7756, desc:'Ponto de largada de vários grupos de corrida da cidade. Aberto 24h, ciclismo e skate também.' },
+  { id:5, name:'Parque Maurílio Biagi', addr:'Av. Elpídio Gomes – Centro', lat:-21.1769, lng:-47.8142, desc:'Ao lado da Câmara Municipal. Pista de caminhada, esculturas e muito espaço verde. 6h–21h.' },
+  { id:6, name:'Av. Fiusa – Jardim Canadá', addr:'Alto da Av. Fiusa – Jd. Canadá', lat:-21.2050, lng:-47.8556, desc:'Trecho sombreado e tranquilo, sem carros. Favorito de corredores experientes pela qualidade do ar.' },
+  { id:7, name:'Cava do Bosque – Atletismo', addr:'R. Camilo de Mattos, 627 – Campos Elíseos', lat:-21.1870, lng:-47.8248, desc:'Pista oficial de atletismo, gratuita. Inscrição na secretaria. Seg–Sex 8h–18h.' },
+  { id:8, name:'Parque Olhos D\'Água', addr:'Zona Sul – Ribeirão Preto', lat:-21.2280, lng:-47.8380, desc:'100.000 m² de área verde. Ideal para corridas longas em contato com a natureza.' },
+  { id:9, name:'Parque das Andorinhas', addr:'Av. Luís Galvão César, 1911 – Zona Oeste', lat:-21.1920, lng:-47.8620, desc:'Pista de cross country em terreno variado, renovada por ex-atletas. Único da região.' }
+];
+
+const RECORDS = {};
+const NAMES  = ['Carlos Melo','Ana Lima','Pedro Ramos','Fernanda Cruz','Lucas Alves','Beatriz Neves','Rafael Costa','Juliana Faria','Marcos Vidal','Patrícia Saad'];
+const INITS  = ['CM','AL','PR','FC','LA','BN','RC','JF','MV','PS'];
+POINTS.forEach(p => {
+  RECORDS[p.id] = {
+    '5':  p.id%3===0 ? null : { name:NAMES[(p.id+1)%10], time:19*60+30+p.id*47, initials:INITS[(p.id+1)%10] },
+    '10': p.id%4===0 ? null : { name:NAMES[(p.id+3)%10], time:44*60+10+p.id*62, initials:INITS[(p.id+3)%10] },
+    '21': p.id%2===0 ? null : { name:NAMES[(p.id+5)%10], time:1*3600+48*60+p.id*91, initials:INITS[(p.id+5)%10] }
+  };
+});
+
+// ══════════════════════════════════
+//  LEAFLET MAP (dark tile)
+// ══════════════════════════════════
+const RP = [-21.1901, -47.8229];
+const lmap = L.map('map', { center:RP, zoom:14, zoomControl:true, attributionControl:true });
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom:19, subdomains:'abcd',
+  attribution:'© OpenStreetMap | © CARTO'
+}).addTo(lmap);
+
+// ══════════════════════════════════
+//  PLAYER MARKER
+// ══════════════════════════════════
+function playerSVG(sprint=false) {
+  const c = sprint ? '#ffd700' : '#ff8c00';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="62" viewBox="0 0 40 62">
+    <ellipse cx="20" cy="56" rx="12" ry="5" fill="rgba(0,0,0,.35)"/>
+    <line x1="16" y1="36" x2="13" y2="50" stroke="#1a6fe8" stroke-width="5" stroke-linecap="round"/>
+    <line x1="24" y1="36" x2="27" y2="50" stroke="#1a6fe8" stroke-width="5" stroke-linecap="round"/>
+    <ellipse cx="12" cy="51" rx="6" ry="3" fill="${c}"/>
+    <ellipse cx="28" cy="51" rx="6" ry="3" fill="${c}"/>
+    <rect x="12" y="20" width="16" height="17" rx="4" fill="#e03030"/>
+    <rect x="12" y="26" width="16" height="2" fill="white"/>
+    <line x1="12" y1="24" x2="4" y2="34" stroke="#e03030" stroke-width="5" stroke-linecap="round"/>
+    <line x1="28" y1="24" x2="36" y2="34" stroke="#e03030" stroke-width="5" stroke-linecap="round"/>
+    <rect x="17" y="12" width="6" height="9" rx="2" fill="#d4956a"/>
+    <ellipse cx="20" cy="8" rx="10" ry="11" fill="#d4956a"/>
+    <path d="M10,6 Q20,-5 30,6" fill="#2a1505"/>
+    <circle cx="16.5" cy="8" r="2.2" fill="white"/><circle cx="23.5" cy="8" r="2.2" fill="white"/>
+    <circle cx="16.5" cy="8" r="1.1" fill="#222"/><circle cx="23.5" cy="8" r="1.1" fill="#222"/>
+    ${sprint?'<circle cx="20" cy="29" r="10" fill="rgba(255,215,0,0.18)"/>':''}
+    <circle cx="20" cy="56" r="5" fill="${c}" opacity=".7"/>
+  </svg>`;
+}
+
+function makePlayerIcon(sprint=false) {
+  return L.divIcon({
+    html: playerSVG(sprint),
+    iconSize:[40,62], iconAnchor:[20,56],
+    className:'player-pin'
+  });
+}
+
+const playerMarker = L.marker(RP, { icon:makePlayerIcon(), zIndexOffset:1000 }).addTo(lmap);
+const playerAccCircle = L.circle(RP, { radius:8, color:'#ff8c00', fillColor:'#ff8c00', fillOpacity:0.2, weight:1.5 }).addTo(lmap);
+
+// ══════════════════════════════════
+//  RUN POINT MARKERS
+// ══════════════════════════════════
+function runIcon(near=false) {
+  const sz = near ? 44 : 34;
+  const bg = near ? '#ff8c00' : 'rgba(255,140,0,.75)';
+  const glow = near ? '0 0 18px rgba(255,140,0,.8)' : '0 0 8px rgba(255,140,0,.4)';
+  return L.divIcon({
+    html:`<div style="width:${sz}px;height:${sz}px;background:${bg};border-radius:50%;border:2px solid ${near?'#fff':'rgba(255,255,255,.4)'};display:flex;align-items:center;justify-content:center;font-size:${near?19:14}px;box-shadow:${glow};">🏁</div>`,
+    iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], className:''
+  });
+}
+
+const ptMarkers = {};
+POINTS.forEach(pt => {
+  const m = L.marker([pt.lat,pt.lng], { icon:runIcon(false) }).addTo(lmap);
+  m.on('click', () => openModal(pt));
+
+  // Tooltip com nome
+  m.bindTooltip(pt.name, {
+    permanent:false, direction:'top', offset:[0,-20],
+    className:'', opacity:0.95
+  });
+
+  ptMarkers[pt.id] = m;
+});
+
+// ══════════════════════════════════
+//  GPS REAL
+// ══════════════════════════════════
+let gpsEnabled = false;
+let lastGPSPos = null, lastGPSTime = null;
+let playerPos = { lat:RP[0], lng:RP[1] };
+let playerSpeed = 0, isSprinting = false;
+let runDistAcc = 0;
+let lastRunPos = null;
+
+const gpsEl = document.getElementById('gps-status');
+const spdEl = document.getElementById('speed-val');
+const crdEl = document.getElementById('coord-val');
+
+function haversine(a,b,c,d) {
+  const R=6371000, dL=(c-a)*Math.PI/180, dG=(d-b)*Math.PI/180;
+  const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+if ('geolocation' in navigator) {
+  navigator.geolocation.watchPosition(pos => {
+    const { latitude:lat, longitude:lng, speed, accuracy } = pos.coords;
+    gpsEl.textContent = `● GPS ativo (±${Math.round(accuracy)}m)`;
+    gpsEl.className = 'ok';
+    gpsEnabled = true;
+
+    let spd = speed ? speed * 3.6 : 0;
+    if (!speed && lastGPSPos && lastGPSTime) {
+      const dt = (Date.now() - lastGPSTime) / 1000;
+      const d = haversine(lastGPSPos.lat, lastGPSPos.lng, lat, lng);
+      spd = dt > 0 ? (d/dt)*3.6 : 0;
+    }
+
+    // Acumula distância de corrida
+    if (activeRun && lastRunPos) {
+      const d = haversine(lastRunPos.lat, lastRunPos.lng, lat, lng);
+      if (d < 50) runDistAcc += d / 1000;
+    }
+    if (activeRun) lastRunPos = {lat, lng};
+
+    lastGPSPos = {lat, lng};
+    lastGPSTime = Date.now();
+    playerPos = {lat, lng};
+    playerSpeed = spd;
+
+    playerMarker.setLatLng([lat,lng]);
+    playerMarker.setIcon(makePlayerIcon(isSprinting));
+    playerAccCircle.setLatLng([lat,lng]);
+    if (accuracy < 50) playerAccCircle.setRadius(accuracy);
+
+    lmap.panTo([lat,lng], { animate:true, duration:0.6 });
+
+    spdEl.textContent = spd.toFixed(1) + ' km/h';
+    crdEl.textContent = lat.toFixed(5) + ', ' + lng.toFixed(5);
+
+    checkProximity(lat, lng);
+  },
+  err => {
+    gpsEl.textContent = '● GPS off – use joystick';
+    gpsEl.className = 'err';
+  },
+  { enableHighAccuracy:true, maximumAge:2000, timeout:15000 });
+} else {
+  gpsEl.textContent = '● GPS não suportado';
+  gpsEl.className = 'err';
+}
+
+function checkProximity(lat, lng) {
+  POINTS.forEach(pt => {
+    const d = haversine(lat, lng, pt.lat, pt.lng);
+    ptMarkers[pt.id].setIcon(runIcon(d < 100));
+  });
+}
+
+// ══════════════════════════════════
+//  JOYSTICK
+// ══════════════════════════════════
+const jBase=document.getElementById('joy-base'), jThumb=document.getElementById('joy-thumb');
+const JMAX=32;
+let jActive=false, jSx, jSy, jIn={x:0,y:0};
+
+function jMove(dx,dy){
+  const len=Math.hypot(dx,dy), c=Math.min(len,JMAX);
+  const ax=len>0?dx/len:0, ay=len>0?dy/len:0;
+  jIn.x=ax*Math.min(1,len/JMAX); jIn.y=ay*Math.min(1,len/JMAX);
+  jThumb.style.transform=`translate(calc(-50% + ${ax*c}px), calc(-50% + ${ay*c}px))`;
+}
+function jRelease(){ if(!jActive)return; jActive=false; jIn.x=0; jIn.y=0; jThumb.style.transform='translate(-50%,-50%)'; }
+
+jBase.addEventListener('mousedown',e=>{ jActive=true; jSx=e.clientX; jSy=e.clientY; });
+jBase.addEventListener('touchstart',e=>{ e.preventDefault(); jActive=true; jSx=e.touches[0].clientX; jSy=e.touches[0].clientY; },{passive:false});
+document.addEventListener('mousemove',e=>{ if(jActive) jMove(e.clientX-jSx,e.clientY-jSy); });
+document.addEventListener('touchmove',e=>{ if(jActive) jMove(e.touches[0].clientX-jSx,e.touches[0].clientY-jSy); },{passive:false});
+document.addEventListener('mouseup',jRelease);
+document.addEventListener('touchend',jRelease);
+
+const sprintBtn=document.getElementById('sprint-btn');
+sprintBtn.addEventListener('mousedown',()=>{ isSprinting=true; sprintBtn.classList.add('active'); });
+sprintBtn.addEventListener('touchstart',e=>{ e.preventDefault(); isSprinting=true; sprintBtn.classList.add('active'); });
+sprintBtn.addEventListener('mouseup',()=>{ isSprinting=false; sprintBtn.classList.remove('active'); });
+sprintBtn.addEventListener('touchend',()=>{ isSprinting=false; sprintBtn.classList.remove('active'); });
+
+const keys={};
+document.addEventListener('keydown',e=>keys[e.key]=true);
+document.addEventListener('keyup',e=>{ keys[e.key]=false; });
+
+// ══════════════════════════════════
+//  LOOP – simulação joystick
+// ══════════════════════════════════
+const DLT = 1/111320;
+const DLG = 1/(111320*Math.cos(-21.19*Math.PI/180));
+const WSPD=1.8, SSPD=4.0;
+let lastT=0, walkPh=0;
+
+function loop(t){
+  requestAnimationFrame(loop);
+  const dt=Math.min((t-lastT)/1000,0.1); lastT=t;
+
+  if(keys['ArrowUp']||keys['w'])    {jIn.x=0;jIn.y=-1;}
+  else if(keys['ArrowDown']||keys['s'])  {jIn.x=0;jIn.y=1;}
+  else if(keys['ArrowLeft']||keys['a'])  {jIn.x=-1;jIn.y=0;}
+  else if(keys['ArrowRight']||keys['d']) {jIn.x=1;jIn.y=0;}
+  if(keys['Shift']){isSprinting=true;sprintBtn.classList.add('active');}
+  else if(!sprintBtn.classList.contains('active'))isSprinting=false;
+
+  const jLen=Math.hypot(jIn.x,jIn.y);
+  if(!gpsEnabled && jLen>0.05){
+    const spd=isSprinting?SSPD:WSPD;
+    playerPos.lat += (-jIn.y)*spd*dt*DLT;
+    playerPos.lng += jIn.x*spd*dt*DLG;
+    playerSpeed = spd*3.6;
+
+    playerMarker.setLatLng([playerPos.lat,playerPos.lng]);
+    playerMarker.setIcon(makePlayerIcon(isSprinting));
+    playerAccCircle.setLatLng([playerPos.lat,playerPos.lng]);
+    lmap.panTo([playerPos.lat,playerPos.lng],{animate:false});
+
+    spdEl.textContent=playerSpeed.toFixed(1)+' km/h';
+    crdEl.textContent=playerPos.lat.toFixed(5)+', '+playerPos.lng.toFixed(5);
+    checkProximity(playerPos.lat,playerPos.lng);
+  } else if(!gpsEnabled) {
+    playerSpeed=0; spdEl.textContent='0.0 km/h';
+  }
+
+  if(playerSpeed>0.3){ walkPh+=playerSpeed*dt*2; const b=Math.sin(walkPh)*2.5; const el=playerMarker.getElement(); if(el) el.style.marginTop=b+'px'; }
+
+  if(activeRun) updateRunHUD();
+}
+requestAnimationFrame(loop);
+
+// ══════════════════════════════════
+//  MODAL
+// ══════════════════════════════════
+let curPt=null, curD='5';
+
+function openModal(pt){
+  curPt=pt; curD='5';
+  document.getElementById('modal-name').textContent=pt.name;
+  document.getElementById('modal-addr').textContent=pt.addr;
+  document.getElementById('modal-desc').textContent=pt.desc;
+  document.querySelectorAll('.dtab').forEach(t=>t.classList.toggle('on',t.dataset.d==='5'));
+  updRec();
+  document.getElementById('modal-bg').classList.remove('hidden');
+}
+
+document.getElementById('modal-x').addEventListener('click',()=>document.getElementById('modal-bg').classList.add('hidden'));
+document.getElementById('modal-bg').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-bg')) document.getElementById('modal-bg').classList.add('hidden'); });
+
+document.querySelectorAll('.dtab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    curD=tab.dataset.d;
+    document.querySelectorAll('.dtab').forEach(t=>t.classList.remove('on'));
+    tab.classList.add('on'); updRec();
+  });
+});
+
+function fmt(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60); return h>0?`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
+function fmtP(s,d){ const p=s/d; return `${Math.floor(p/60)}:${String(Math.floor(p%60)).padStart(2,'0')} /km`; }
+
+function updRec(){
+  const r=RECORDS[curPt.id][curD];
+  if(r){
+    document.getElementById('rav').textContent=r.initials;
+    document.getElementById('rname').textContent=r.name;
+    document.getElementById('rmeta').textContent=`${curD}km • Recorde do ponto`;
+    document.getElementById('rtime').textContent=fmt(r.time);
+    document.getElementById('rpace').textContent=fmtP(r.time,parseFloat(curD));
+  } else {
+    document.getElementById('rav').textContent='?';
+    document.getElementById('rname').textContent='Sem recorde ainda';
+    document.getElementById('rmeta').textContent='Seja o primeiro recordista!';
+    document.getElementById('rtime').textContent='--:--:--';
+    document.getElementById('rpace').textContent='';
+  }
+}
+
+document.getElementById('challenge-btn').addEventListener('click',()=>{
+  document.getElementById('modal-bg').classList.add('hidden');
+  startCD();
+});
+
+// ══════════════════════════════════
+//  COUNTDOWN
+// ══════════════════════════════════
+let cdActive=false;
+function startCD(){
+  cdActive=true;
+  const ov=document.getElementById('countdown'), num=document.getElementById('cd-num');
+  ov.classList.remove('hidden'); let n=3;
+  num.textContent=n; num.style.color='#ff8c00';
+  const ti=setInterval(()=>{
+    n--;
+    if(n<=0){ clearInterval(ti); num.textContent='GO!'; num.style.color='#4cff88'; setTimeout(()=>{ ov.classList.add('hidden'); cdActive=false; startRun(); },700); }
+    else { num.textContent=n; num.style.animation='none'; void num.offsetWidth; num.style.animation='cdPop .7s ease-out'; }
+  },850);
+}
+
+// ══════════════════════════════════
+//  RUN
+// ══════════════════════════════════
+let activeRun=null, runStart=null;
+
+function startRun(){
+  activeRun={ pt:curPt, dist:parseFloat(curD), ds:curD };
+  runStart=Date.now(); runDistAcc=0; lastRunPos=null;
+  document.getElementById('run-hud').classList.remove('hidden');
+  if(!document.getElementById('fin-btn')){
+    const b=document.createElement('button'); b.id='fin-btn'; b.textContent='🏁 FINALIZAR';
+    b.style.cssText='position:fixed;bottom:155px;right:22px;background:rgba(255,140,0,.93);border:none;border-radius:11px;color:#fff;font-size:12px;font-weight:700;padding:9px 13px;cursor:pointer;z-index:1001;';
+    b.addEventListener('click',finishRun); document.body.appendChild(b);
+  }
+}
+
+function updateRunHUD(){
+  const el=(Date.now()-runStart)/1000;
+  const h=Math.floor(el/3600),m=Math.floor((el%3600)/60),s=Math.floor(el%60);
+  document.getElementById('rt').textContent=h>0?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const simD=Math.min(activeRun.dist,el*0.003);
+  const dispD=gpsEnabled?Math.min(activeRun.dist,runDistAcc):simD;
+  document.getElementById('rd').textContent=dispD.toFixed(2);
+  if(el>15&&dispD>0.01){
+    const pace=el/dispD;
+    document.getElementById('rp').textContent=`${Math.floor(pace/60)}:${String(Math.floor(pace%60)).padStart(2,'0')}`;
+  }
+}
+
+function finishRun(){
+  const total=(Date.now()-runStart)/1000;
+  const pt=activeRun.pt, ds=activeRun.ds;
+  const rec=RECORDS[pt.id][ds];
+  const isNew=!rec||total<rec.time;
+  document.getElementById('run-hud').classList.add('hidden');
+  const fb=document.getElementById('fin-btn'); if(fb)fb.remove();
+  if(isNew){
+    RECORDS[pt.id][ds]={name:'Você',time:total,initials:'EU'};
+    document.getElementById('fbadge').innerHTML='<div class="nr-badge">🏆 NOVO RECORDE!</div>';
+    document.getElementById('ftitle').textContent='Incrível! Recorde Batido!';
+    document.getElementById('ftitle').style.color='#ffd700';
+  } else {
+    document.getElementById('fbadge').innerHTML='';
+    document.getElementById('ftitle').textContent='Corrida Concluída!';
+    document.getElementById('ftitle').style.color='#ff8c00';
+  }
+  document.getElementById('ftime').textContent=fmt(total);
+  document.getElementById('fsub').textContent=isNew
+    ?`Você é o novo recordista de ${activeRun.dist}km em ${pt.name}!`
+    :`Recorde: ${fmt(rec.time)} — Continue tentando!`;
+  document.getElementById('finish-bg').classList.remove('hidden');
+  activeRun=null;
+}
+
+document.getElementById('finish-back').addEventListener('click',()=>document.getElementById('finish-bg').classList.add('hidden'));
+</script>
+</body>
+</html>
